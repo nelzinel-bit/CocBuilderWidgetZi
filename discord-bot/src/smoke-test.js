@@ -40,10 +40,16 @@ const sample = {
   heroes2: []
 };
 
-const report = parseVillageJson(JSON.stringify(sample), {
+const sampleJson = JSON.stringify(sample);
+const deliberatelyBrokenJson = sampleJson.replace("},{\"data\":1000008", "}{\"data\":1000008");
+const report = parseVillageJson(sampleJson, {
   builderPotions: 1,
   researchPotions: 1
 });
+const repairedReport = parseVillageJson(deliberatelyBrokenJson);
+if (repairedReport.repairedCommaCount !== 1) {
+  throw new Error("Missing comma between consecutive game objects was not repaired.");
+}
 const embeds = buildReportEmbeds(report);
 
 if (report.townHall !== 18) throw new Error("Town Hall was not parsed.");
@@ -66,4 +72,5 @@ console.log("Loaded game-data entries: " + catalogueSize());
 console.log("Town Hall 18 Cannon max level: " + cannonMax);
 console.log("Builder Potion projected 12h → " + Math.round(builderRow.boostedRemaining / 3600) + "h.");
 console.log("Research Potion projected 48h → " + Math.round(researchRow.boostedRemaining / 3600) + "h.");
+console.log("Malformed JSON comma repair: " + repairedReport.repairedCommaCount + " repaired.");
 console.log("Generated report embeds: " + embeds.length);
