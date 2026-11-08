@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { createServer } from "node:http";
 import {
   ActionRowBuilder,
   Client,
@@ -27,6 +28,20 @@ if (!token || !clientId || !guildId) {
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
+});
+
+const port = Number(process.env.PORT || 10000);
+const healthServer = createServer((req, res) => {
+  if (req.method === "GET" && (req.url === "/" || req.url === "/health")) {
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    res.end(JSON.stringify({ ok: true, service: "kumpadres-coc-bot" }));
+    return;
+  }
+  res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify({ error: "Not found" }));
+});
+healthServer.listen(port, "0.0.0.0", () => {
+  console.log("Kumpadres-Bot health endpoint listening on port " + port);
 });
 
 const fieldIds = ["json_part_1", "json_part_2", "json_part_3", "json_part_4", "json_part_5"];
