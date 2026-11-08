@@ -1,29 +1,36 @@
-# Kumpadres-Bot — Clash of Clans JSON Import MVP
+# Kumpadres-Bot — Clash of Clans one-paste JSON import
 
-This bot uses your existing Discord application, Kumpadres-Bot. Members paste the JSON copied from Clash of Clans into a Discord modal. The bot parses it and publishes a readable report in the channel where the command was run.
+This bot uses your existing Discord application, Kumpadres-Bot. A member runs `/coc import`, opens a private one-time link, pastes the entire Clash of Clans JSON once into a browser form, and submits it. Kumpadres-Bot publishes the readable report in the Discord channel where the command was run.
 
 ## What it does
 
-- /coc import opens a five-part paste form.
-- Each text field accepts up to 4,000 characters (up to 20,000 total).
-- The bot joins the parts in order, validates the JSON and reads the player tag, Town Hall, Builder Hall, inventory and timers.
-- A public report is published in the same channel. The submitting member gets a private confirmation.
+- `/coc import` replies privately with a button to a one-paste import form.
+- The member pastes the complete clipboard JSON into one large text box. No chunking and no file upload are needed.
+- The web form supports JSON up to 256 KB.
+- The private import link is a random single-use token, expires after 15 minutes, and is bound server-side to the Discord user and channel that requested it.
+- The bot validates the JSON and publishes a readable report in that same channel. The member's confirmation remains private.
 - Reports include Home Village buildings, traps, heroes, troops, spells, pets, siege machines and equipment, plus Builder Base buildings, traps, troops and heroes.
-- Rows show current level, Town Hall or Builder Hall maximum level, quantity and status.
+- Rows show current level, maximum level supported by the member's Town Hall or Builder Hall and available prerequisite buildings, quantity and status.
 - Upgrade timers are calculated from the export timestamp. Helper and Clock Tower cooldowns are also shown.
-- /coc help explains the import process.
-- The bot does not retain a permanent copy of member exports. Each import posts a new report.
+- `/coc help` explains the import flow.
+- The bot does not save the submitted JSON to disk or a database. It is held in memory only while processing, then discarded.
 - No Supercell API token is required.
 
-## Pasting a large JSON export
+## Import flow
 
-Discord modal text fields are limited to 4,000 characters and a modal can contain up to five text inputs. If the export fits in Part 1, paste it there and leave the rest blank. If it is longer, split the original text into consecutive chunks using a text editor and paste each chunk into Parts 1–5 in order. Do not omit, repeat, or add characters between chunks.
+1. Member copies the JSON export from Clash of Clans.
+2. In the target Discord channel, member runs `/coc import`.
+3. Bot replies privately with an **Open one-paste JSON importer** button.
+4. Member opens the link, pastes the entire JSON in one field, then submits.
+5. Bot posts the report to the original channel.
+
+The private link expires after 15 minutes and is single-use. Do not share it. If the Render service restarts before submission, the member should run `/coc import` again to get a fresh link.
 
 ## Maximum-level data
 
-Names and upgrade requirements are loaded from the clash-of-clans-data npm package, pinned to version 0.19.1. The parser checks Town Hall, Builder Hall, Hero Hall, Laboratory, Pet House and Blacksmith requirements when those requirements are supplied by the dataset. If the data package cannot provide a defensible cap, the Max column shows a dash instead of guessing.
+Names and upgrade requirements are loaded from the `clash-of-clans-data` npm package, pinned to version 0.19.1. The parser checks Town Hall, Builder Hall, Hero Hall, Laboratory, Pet House and Blacksmith requirements where the dataset provides them. If the data package cannot provide a defensible cap, the Max column shows a dash rather than guessing.
 
-The data package is MIT-licensed and states that its game data is sourced from the Clash of Clans Wiki. See the package's upstream README and LICENSE for attribution and terms.
+The package is MIT-licensed and says its game data is sourced from the Clash of Clans Wiki. See its upstream README and LICENSE for attribution and terms.
 
 ## Discord permissions
 
@@ -33,7 +40,7 @@ Kumpadres-Bot needs these permissions in the target channel:
 - Embed Links
 - Use Application Commands
 
-Members need permission to use application commands in that channel. Since imports are pasted into a modal, Attach Files is not required. The bot only requests the Guilds Gateway intent; it does not read ordinary chat messages or need the privileged Message Content Intent.
+Members need permission to use application commands in that channel. Attach Files is not required. The bot only requests the Guilds Gateway intent; it does not read ordinary chat messages or need the privileged Message Content Intent.
 
 ## Environment variables
 
@@ -41,40 +48,32 @@ Set these as private service environment variables. Never commit the bot token.
 
 | Variable | Required | Where to find it |
 |---|---|---|
-| DISCORD_TOKEN | Yes | Developer Portal → Kumpadres application → Bot → Reset Token, only if you do not have the current token |
-| DISCORD_CLIENT_ID | Yes | Developer Portal → General Information → Application ID |
-| DISCORD_GUILD_ID | Yes | Enable Discord Developer Mode, then right-click your server → Copy Server ID |
-| COC_CHANNEL_ID | No | Right-click the target channel → Copy Channel ID. If blank, imports are accepted in any server text channel |
-
-## Run locally
-
-Use Node.js 24.
-
-    cd discord-bot
-    npm install
-    cp .env.example .env
-    # Fill in the environment values in .env
-    npm start
-
-When the bot connects, it registers the /coc command in the guild identified by DISCORD_GUILD_ID. Guild commands appear quickly. Registration replaces this application's guild command list with the two commands in this project: /coc import and /coc help.
+| `DISCORD_TOKEN` | Yes | Developer Portal → Kumpadres application → Bot |
+| `DISCORD_CLIENT_ID` | Yes | Developer Portal → General Information → Application ID |
+| `DISCORD_GUILD_ID` | Yes | Enable Discord Developer Mode, then right-click your server → Copy Server ID |
+| `COC_CHANNEL_ID` | No | Right-click the target channel → Copy Channel ID. If blank, imports are accepted in any server text channel |
+| `PUBLIC_BASE_URL` | No on Render | Automatically uses Render's `RENDER_EXTERNAL_URL`; set this if hosting elsewhere |
 
 ## Deploy with Render
 
-A root-level render.yaml is included for a Background Worker. In Render:
-1. Choose New → Blueprint.
-2. Connect the GitHub repository nelzinel-bit/CocBuilderWidgetZi.
-3. Review the kumpadres-coc-bot Background Worker.
-4. Add DISCORD_TOKEN, DISCORD_CLIENT_ID and DISCORD_GUILD_ID as private environment values.
-5. Add COC_CHANNEL_ID with your target channel ID to restrict imports to the one CoC channel.
-6. Deploy.
+A root-level `render.yaml` defines a web service (the HTTP import form) plus the Discord Gateway connection.
 
-The bot will register /coc commands when it starts. You do not need to invite it again; Kumpadres-Bot is already in your server.
+1. In Render, use **Manual Sync** on the existing Blueprint or let the connected Blueprint sync the repository update.
+2. Wait for the new deployment to finish.
+3. Confirm logs show `Kumpadres-Bot is online as ...` and `Registered /coc commands...`.
+4. The Discord application is already installed in the server; no new invitation is required.
 
-## Important limits
+Set `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID` and optionally `COC_CHANNEL_ID` as private environment values.
 
-- The JSON is a snapshot, not a live account connection. Timers are adjusted using the export timestamp and continue locally in the report.
-- If a timer has already elapsed, the bot labels it as elapsed and asks the member to import a fresh export.
+## Free hosting note
+
+Render free web services can spin down during inactivity and may restart. The bot's in-memory one-time import tickets are lost on restart, so a member may need to run `/coc import` again to get a new link. For reliable always-on bot operation, use an always-on paid host or a computer/server that remains online.
+
+## Important limitations
+
+- The village JSON is a snapshot, not a live account connection. Timers are adjusted using the export timestamp.
+- A timer that already elapsed is labelled elapsed; import a fresh export for updated data.
 - Unknown game IDs or missing level prerequisites are shown as unknown / a dash; the bot does not invent names or level caps.
-- Large reports are published as several consecutive bot messages in the command channel.
-- The MVP posts reports but does not save member data for later retrieval.
-- This is an unofficial community project and is not affiliated with Supercell.
+- Large reports are published as several consecutive bot messages.
+- The MVP does not retain member profiles or support historical lookups.
+- This is an unofficial community tool and is not affiliated with Supercell.
