@@ -37,7 +37,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const importPageTemplate = readFileSync(new URL("../import.html", import.meta.url), "utf8");
 const importTickets = new Map();
 const TICKET_TTL_MS = 15 * 60 * 1000;
-const MAX_IMPORT_BYTES = 256 * 1024;
+const MAX_IMPORT_BYTES = 300 * 1024;
 const MAX_ACTIVE_TICKETS = 1000;
 const userLastImport = new Map();
 
@@ -153,11 +153,21 @@ const server = createServer(async (req, res) => {
         importTickets.delete(ticketToken);
         return sendJson(res, 410, { error: "This import link expired or was already used. Run /coc import in Discord to get a new link." });
       }
+      if (ticket.processing) {
+        return sendJson(res, 409, { error: "This import is already being processed. Please wait for the result." });
+      }
       if (typeof body.json !== "string" || !body.json.trim()) {
         return sendJson(res, 400, { error: "Paste your complete village JSON first." });
       }
 
-      const report = await processImport(ticket, body.json);
+      ticket.processing = true;
+      let report;
+      try {
+        report = await processImport(ticket, body.json);
+      } catch (error) {
+        ticket.processing = false;
+        throw error;
+      }
       importTickets.delete(ticketToken);
       return sendJson(res, 200, {
         ok: true,
