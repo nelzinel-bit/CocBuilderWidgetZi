@@ -79,6 +79,26 @@ function getRemaining(timer, snapshotTimestamp, nowSeconds) {
   return Math.max(0, timer - elapsed);
 }
 
+// Potion duration stacks by hour; effectiveness does not stack.
+// One Builder Potion = 1h at 10x, one Research Potion = 1h at 24x.
+function getBoostedRemaining(remainingSeconds, potionCount, multiplier) {
+  if (potionCount <= 0 || remainingSeconds <= 0) return null;
+  const boostedDuration = potionCount * 3600;
+  const workCompletedDuringBoost = boostedDuration * multiplier;
+  if (remainingSeconds <= workCompletedDuringBoost) {
+    return Math.ceil(remainingSeconds / multiplier);
+  }
+  return Math.ceil(remainingSeconds - boostedDuration * (multiplier - 1));
+}
+
+function validatePotionCount(value, label) {
+  const count = Number(value ?? 0);
+  if (!Number.isInteger(count) || count < 0 || count > 5) {
+    throw new Error(label + " must be a whole number from 0 to 5.");
+  }
+  return count;
+}
+
 function makeRows(entries, base, caps, activeIds) {
   return list(entries)
     .filter(entry => entry && entry.data !== undefined && entry.lvl !== undefined)
@@ -136,7 +156,7 @@ function categoryEmbeds(title, rows, tag, hallLabel) {
     .setFooter({ text: tag + " · Max levels based on " + hallLabel + " and current game data" }));
 }
 
-export function parseVillageJson(raw) {
+export function parseVillageJson(raw, options = {}) {
   if (typeof raw !== "string" || !raw.trim()) {
     throw new Error("Paste your village JSON into the import form.");
   }
@@ -180,6 +200,8 @@ export function parseVillageJson(raw) {
   if (!townHall) throw new Error("Town Hall level (building ID 1000001) was not found.");
 
   const caps = deriveCaps(data, townHall, builderHall);
+  const builderPotions = validatePotionCount(options.builderPotions, "Builder Potions");
+  const researchPotions = validatePotionCount(options.researchPotions, "Research Potions");
   let timestamp = number(data.timestamp, Date.now() / 1000);
   if (timestamp > 1000000000000) timestamp /= 1000;
   const nowSeconds = Date.now() / 1000;
@@ -197,15 +219,30 @@ export function parseVillageJson(raw) {
       const item = getGameItem(base, id);
       const remaining = getRemaining(timer, timestamp, nowSeconds);
 
+      const potionType =
+        base === "home" && (key === "buildings" || key === "heroes") ? "builder" :
+        base === "home" && (key === "units" || key === "spells") ? "research" :
+        null;
+      const potionCount = potionType === "builder" ? builderPotions :
+        potionType === "research" ? researchPotions : 0;
+      const multiplier = potionType === "builder" ? 10 :
+        potionType === "research" ? 24 : 1;
+      const boostedRemaining = getBoostedRemaining(remaining, potionCount, multiplier);
+
       timerRows.push({
         dataId: id,
         base,
+        key,
         label,
         name: getItemName(base, id),
         level: current,
         max: getMaxLevelAt(item, caps),
         remaining,
-        finishAt: timestamp + timer
+        finishAt: timestamp + timer,
+        potionType: potionCount > 0 ? potionType : null,
+        potionCount,
+        boostedRemaining,
+        boostedFinishAt: boostedRemaining === null ? null : nowSeconds + boostedRemaining
       });
 
       if (remaining > 0) activeIds.add(base + ":" + id);
@@ -249,7 +286,8 @@ export function parseVillageJson(raw) {
     timerRows,
     cooldowns,
     sections,
-    caps
+    caps,
+    potionPlan: { builderPotions, researchPotions }
   };
 }
 
@@ -261,8 +299,13 @@ export function buildReportEmbeds(report) {
     "**Builder Base:** " + (report.builderHall ? "Builder Hall " + report.builderHall : "Level unavailable in this export"),
     "**Export snapshot:** " + report.snapshotText + " (Philippine time)",
     "**Upgrade timers found:** " + report.timerRows.length,
+    "**Planned boosts:** " +
+      (report.potionPlan.builderPotions ? report.potionPlan.builderPotions + " Builder Potion(s)" : "No Builder Potion") +
+      " · " +
+      (report.potionPlan.researchPotions ? report.potionPlan.researchPotions + " Research Potion(s)" : "No Research Potion"),
     "",
-    "Each row shows current level, maximum level at the member's hall level, quantity, and status."
+    "Each row shows current level, maximum level at the member's hall level, quantity, and status.",
+    "Potion finish times assume the selected potions are used immediately after this import."
   ];
 
   embeds.push(new EmbedBuilder()
@@ -275,10 +318,18 @@ export function buildReportEmbeds(report) {
     const timerLines = report.timerRows.map(row => {
       const levelText = row.level === null ? "" : " Lv " + row.level;
       const maxText = row.max === null ? "" : "/" + row.max;
-      const finishText = row.remaining > 0
-        ? formatDuration(row.remaining) + " left · finishes " + formatDate(row.finishAt)
-        : "Timer elapsed · import a fresh export";
-      return row.label + ": **" + row.name + "**" + levelText + maxText + "\n↳ " + finishText;
+      const normalText = row.remaining > 0
+        ? formatDuration(row.remaining) + " · " + formatDate(row.finishAt)
+        : "Elapsed — import a fresh export";
+      let timingText = "↳ Normal remaining: " + normalText;
+      if (row.boostedRemaining !== null) {
+        const potionName = row.potionType === "builder" ? "Builder Potion" : "Research Potion";
+        const boostedText = row.boostedRemaining > 0
+          ? formatDuration(row.boostedRemaining) + " · " + formatDate(row.boostedFinishAt)
+          : "Completes during potion boost";
+        timingText += "\n↳ With " + potionName + " ×" + row.potionCount + ": " + boostedText;
+      }
+      return row.label + ": **" + row.name + "**" + levelText + maxText + "\n" + timingText;
     });
 
     for (const [index, page] of chunkLines(timerLines, 1450).entries()) {
