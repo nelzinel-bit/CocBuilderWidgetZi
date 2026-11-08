@@ -82,7 +82,7 @@ async function readRequestBody(req, maxBytes) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function processImport(ticket, raw) {
+async function processImport(ticket, raw, potionOptions) {
   const previous = userLastImport.get(ticket.userId) || 0;
   if (Date.now() - previous < 15000) {
     const error = new Error("Please wait a few seconds before importing again.");
@@ -90,7 +90,7 @@ async function processImport(ticket, raw) {
     throw error;
   }
 
-  const report = parseVillageJson(raw);
+  const report = parseVillageJson(raw, potionOptions);
   const embeds = buildReportEmbeds(report);
   const channel = await client.channels.fetch(ticket.channelId);
   if (!channel || !channel.isTextBased() || typeof channel.send !== "function") {
@@ -163,7 +163,19 @@ const server = createServer(async (req, res) => {
       ticket.processing = true;
       let report;
       try {
-        report = await processImport(ticket, body.json);
+        const builderPotions = Number(body.builderPotions ?? 0);
+        const researchPotions = Number(body.researchPotions ?? 0);
+        if (!Number.isInteger(builderPotions) || builderPotions < 0 || builderPotions > 5) {
+          const error = new Error("Builder Potions must be a whole number from 0 to 5.");
+          error.statusCode = 400;
+          throw error;
+        }
+        if (!Number.isInteger(researchPotions) || researchPotions < 0 || researchPotions > 5) {
+          const error = new Error("Research Potions must be a whole number from 0 to 5.");
+          error.statusCode = 400;
+          throw error;
+        }
+        report = await processImport(ticket, body.json, { builderPotions, researchPotions });
       } catch (error) {
         ticket.processing = false;
         throw error;
