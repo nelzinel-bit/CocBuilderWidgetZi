@@ -1,0 +1,16 @@
+{
+  "name": "kumpadres-coc-village-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/register-commands.js"
+  },
+  "dependencies": {
+    "clash-of-clans-data": "0.19.1",
+    "discord.js": "14.27.0",
+    "dotenv": "17.2.3"
+  }
+}
