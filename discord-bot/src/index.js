@@ -1,14 +1,15 @@
 import "dotenv/config";
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   Client,
   EmbedBuilder,
   Events,
   GatewayIntentBits,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   REST,
   Routes
 } from "discord.js";
@@ -20,65 +21,161 @@ const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
 const allowedChannelId = process.env.COC_CHANNEL_ID || "";
+const port = Number(process.env.PORT || 10000);
+const publicBaseUrl = (process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
 
 if (!token || !clientId || !guildId) {
-  console.error("Missing DISCORD_TOKEN, DISCORD_CLIENT_ID, or DISCORD_GUILD_ID environment variable.");
+  console.error("Missing DISCORD_TOKEN, DISCORD_CLIENT_ID, or DISCORD_GUILD_ID.");
+  process.exit(1);
+}
+if (!publicBaseUrl) {
+  console.error("Missing PUBLIC_BASE_URL. Render should provide RENDER_EXTERNAL_URL automatically.");
   process.exit(1);
 }
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const importPageTemplate = readFileSync(new URL("../import.html", import.meta.url), "utf8");
+const importTickets = new Map();
+const TICKET_TTL_MS = 15 * 60 * 1000;
+const MAX_IMPORT_BYTES = 256 * 1024;
+const MAX_ACTIVE_TICKETS = 1000;
+const userLastImport = new Map();
 
-const port = Number(process.env.PORT || 10000);
-const healthServer = createServer((req, res) => {
-  if (req.method === "GET" && (req.url === "/" || req.url === "/health")) {
-    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ok: true, service: "kumpadres-coc-bot" }));
-    return;
+function cleanExpiredTickets() {
+  const now = Date.now();
+  for (const [key, ticket] of importTickets) {
+    if (ticket.expiresAt <= now) importTickets.delete(key);
   }
-  res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify({ error: "Not found" }));
-});
-healthServer.listen(port, "0.0.0.0", () => {
-  console.log("Kumpadres-Bot health endpoint listening on port " + port);
-});
-
-const fieldIds = ["json_part_1", "json_part_2", "json_part_3", "json_part_4", "json_part_5"];
-const maxImportChars = 20000;
-const lastImportByUser = new Map();
-
-function createImportModal(userId) {
-  const modal = new ModalBuilder()
-    .setCustomId("coc_import_json:" + userId)
-    .setTitle("Paste Clash of Clans JSON");
-
-  const labels = [
-    "JSON part 1 of 5 (required)",
-    "JSON part 2 of 5 (optional)",
-    "JSON part 3 of 5 (optional)",
-    "JSON part 4 of 5 (optional)",
-    "JSON part 5 of 5 (optional)"
-  ];
-
-  const rows = fieldIds.map((fieldId, index) => {
-    const input = new TextInputBuilder()
-      .setCustomId(fieldId)
-      .setLabel(labels[index])
-      .setStyle(TextInputStyle.Paragraph)
-      .setMaxLength(4000)
-      .setRequired(index === 0)
-      .setPlaceholder(index === 0
-        ? "Paste the JSON here. If it exceeds 4,000 characters, continue in the next fields."
-        : "Paste the next consecutive chunk here. Leave blank if unused.");
-    return new ActionRowBuilder().addComponents(input);
-  });
-
-  modal.addComponents(...rows);
-  return modal;
+  if (importTickets.size > MAX_ACTIVE_TICKETS) {
+    const oldest = [...importTickets.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt);
+    for (const [key] of oldest.slice(0, importTickets.size - MAX_ACTIVE_TICKETS)) importTickets.delete(key);
+  }
 }
 
-function channelAllowed(interaction) {
+function sendJson(res, statusCode, payload) {
+  res.writeHead(statusCode, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff"
+  });
+  res.end(JSON.stringify(payload));
+}
+
+async function readRequestBody(req, maxBytes) {
+  const declaredLength = Number(req.headers["content-length"] || 0);
+  if (declaredLength > maxBytes) {
+    const error = new Error("The JSON is larger than the 256 KB import limit.");
+    error.statusCode = 413;
+    throw error;
+  }
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      const error = new Error("The JSON is larger than the 256 KB import limit.");
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function processImport(ticket, raw) {
+  const previous = userLastImport.get(ticket.userId) || 0;
+  if (Date.now() - previous < 15000) {
+    const error = new Error("Please wait a few seconds before importing again.");
+    error.statusCode = 429;
+    throw error;
+  }
+
+  const report = parseVillageJson(raw);
+  const embeds = buildReportEmbeds(report);
+  const channel = await client.channels.fetch(ticket.channelId);
+  if (!channel || !channel.isTextBased() || typeof channel.send !== "function") {
+    const error = new Error("I cannot send a report to the original channel. Please check the bot's channel permissions.");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  userLastImport.set(ticket.userId, Date.now());
+  for (let index = 0; index < embeds.length; index += 3) {
+    await channel.send({
+      embeds: embeds.slice(index, index + 3),
+      allowedMentions: { parse: [] }
+    });
+  }
+  return report;
+}
+
+const server = createServer(async (req, res) => {
+  const requestUrl = new URL(req.url || "/", publicBaseUrl);
+
+  if (req.method === "GET" && (requestUrl.pathname === "/" || requestUrl.pathname === "/health")) {
+    return sendJson(res, 200, { ok: true, service: "kumpadres-coc-bot", botReady: client.isReady() });
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/import") {
+    cleanExpiredTickets();
+    const ticketToken = requestUrl.searchParams.get("t") || "";
+    const ticket = importTickets.get(ticketToken);
+    if (!ticket || ticket.expiresAt <= Date.now()) {
+      return sendJson(res, 410, { error: "This import link expired or was already used. Run /coc import in Discord to get a new link." });
+    }
+    const html = importPageTemplate.replace("__IMPORT_TOKEN__", JSON.stringify(ticketToken));
+    res.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer"
+    });
+    return res.end(html);
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/import") {
+    if (!String(req.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
+      return sendJson(res, 415, { error: "Send the import as application/json." });
+    }
+    try {
+      const bodyText = await readRequestBody(req, MAX_IMPORT_BYTES);
+      let body;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        return sendJson(res, 400, { error: "The form request was invalid. Reload the import link and try again." });
+      }
+
+      const ticketToken = typeof body.token === "string" ? body.token : "";
+      const ticket = importTickets.get(ticketToken);
+      if (!ticket || ticket.expiresAt <= Date.now()) {
+        importTickets.delete(ticketToken);
+        return sendJson(res, 410, { error: "This import link expired or was already used. Run /coc import in Discord to get a new link." });
+      }
+      if (typeof body.json !== "string" || !body.json.trim()) {
+        return sendJson(res, 400, { error: "Paste your complete village JSON first." });
+      }
+
+      const report = await processImport(ticket, body.json);
+      importTickets.delete(ticketToken);
+      return sendJson(res, 200, {
+        ok: true,
+        message: "Success! The village report for " + report.tag + " was posted in your Discord channel."
+      });
+    } catch (error) {
+      return sendJson(res, error.statusCode || 400, { error: error.message || "Import failed. Please try again." });
+    }
+  }
+
+  return sendJson(res, 404, { error: "Not found" });
+});
+
+server.listen(port, "0.0.0.0", () => {
+  console.log("Kumpadres-Bot web importer listening on port " + port);
+});
+
+function isChannelAllowed(interaction) {
   return !allowedChannelId || interaction.channelId === allowedChannelId;
 }
 
@@ -90,89 +187,53 @@ async function handleCocCommand(interaction) {
       .setColor(0x5865F2)
       .setTitle("Kumpadres-Bot · CoC JSON Import")
       .setDescription([
-        "1. Open Clash of Clans and copy your village JSON export.",
-        "2. In this channel, run /coc import.",
-        "3. Paste the JSON into Part 1. If it is longer than 4,000 characters, split it into consecutive chunks and use Parts 2–5.",
-        "4. Submit. The bot publishes your readable village report here.",
+        "1. Copy your complete Clash of Clans village JSON.",
+        "2. Run /coc import in this channel.",
+        "3. Open the private import link and paste the entire JSON once.",
+        "4. Submit. I will post your readable report in this same channel.",
         "",
-        "The five fields accept up to 20,000 characters total. Keep the pieces in order and do not add, repeat, or remove characters between them.",
+        "The private link expires after 15 minutes and can be used once. The JSON is processed in memory and is not saved.",
         "",
-        "Timers are calculated from the export timestamp. This is a snapshot, not a live account connection."
+        "Upgrade timers are calculated from the export timestamp. This is a snapshot, not a live account connection."
       ].join("\n"));
-
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
   }
 
   if (subcommand === "import") {
-    if (!channelAllowed(interaction)) {
+    if (!isChannelAllowed(interaction)) {
       await interaction.reply({
         content: "Please run /coc import in the configured Clash of Clans channel.",
         ephemeral: true
       });
       return;
     }
-    await interaction.showModal(createImportModal(interaction.user.id));
-  }
-}
 
-async function handleImportSubmit(interaction) {
-  const expectedId = "coc_import_json:" + interaction.user.id;
-  if (interaction.customId !== expectedId) return;
+    cleanExpiredTickets();
+    const ticketToken = randomBytes(32).toString("hex");
+    importTickets.set(ticketToken, {
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + TICKET_TTL_MS
+    });
 
-  if (!channelAllowed(interaction)) {
+    const link = publicBaseUrl + "/import?t=" + ticketToken;
+    const button = new ButtonBuilder()
+      .setLabel("Open one-paste JSON importer")
+      .setStyle(ButtonStyle.Link)
+      .setURL(link);
+
     await interaction.reply({
-      content: "This import must be submitted in the configured Clash of Clans channel.",
+      content: [
+        "**Your private JSON import form is ready.**",
+        "Open the button, paste your entire Clash of Clans JSON once, and submit.",
+        "The bot will post the readable report in this channel.",
+        "This single-use link expires in 15 minutes. Do not share it."
+      ].join("\n"),
+      components: [new ActionRowBuilder().addComponents(button)],
       ephemeral: true
-    });
-    return;
-  }
-
-  const lastUsed = lastImportByUser.get(interaction.user.id) || 0;
-  if (Date.now() - lastUsed < 15000) {
-    await interaction.reply({
-      content: "Please wait a few seconds before importing another village.",
-      ephemeral: true
-    });
-    return;
-  }
-  lastImportByUser.set(interaction.user.id, Date.now());
-
-  await interaction.deferReply({ ephemeral: true });
-
-  try {
-    // Do not trim individual chunks; joining them exactly preserves the original JSON text.
-    const raw = fieldIds
-      .map(fieldId => interaction.fields.getTextInputValue(fieldId))
-      .join("");
-
-    if (raw.length > maxImportChars) {
-      throw new Error("The import exceeds the 20,000-character limit.");
-    }
-
-    const report = parseVillageJson(raw);
-    const embeds = buildReportEmbeds(report);
-    const channel = await client.channels.fetch(interaction.channelId);
-
-    if (!channel || !channel.isTextBased() || typeof channel.send !== "function") {
-      throw new Error("I cannot send a report to this channel. Please check my channel permissions.");
-    }
-
-    // Three compact embeds per message stay below Discord's combined embed text limit.
-    for (let index = 0; index < embeds.length; index += 3) {
-      await channel.send({
-        embeds: embeds.slice(index, index + 3),
-        allowedMentions: { parse: [] }
-      });
-    }
-
-    await interaction.editReply({
-      content: "Your village report for " + report.tag + " has been published in <#" +
-        interaction.channelId + ">. Export snapshot: " + report.snapshotText + "."
-    });
-  } catch (error) {
-    await interaction.editReply({
-      content: "Import failed: " + error.message
     });
   }
 }
@@ -195,11 +256,6 @@ client.on(Events.InteractionCreate, async interaction => {
   try {
     if (interaction.isChatInputCommand() && interaction.commandName === "coc") {
       await handleCocCommand(interaction);
-      return;
-    }
-
-    if (interaction.isModalSubmit() && interaction.customId.startsWith("coc_import_json:")) {
-      await handleImportSubmit(interaction);
     }
   } catch (error) {
     console.error("Interaction error:", error);
