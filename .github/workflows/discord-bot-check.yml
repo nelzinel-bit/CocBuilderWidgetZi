@@ -1,4 +1,4 @@
-name: Discord bot syntax check
+name: Discord bot syntax and data check
 
 on:
   push:
@@ -11,13 +11,21 @@ on:
       - ".github/workflows/discord-bot-check.yml"
 
 jobs:
-  syntax:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: discord-bot/package-lock.json
+      - name: Install bot dependencies
+        working-directory: discord-bot
+        run: npm install
       - name: Check JavaScript syntax
         working-directory: discord-bot
         run: npm run check
+      - name: Smoke-test game data and report parser
+        working-directory: discord-bot
+        run: npm run smoke
