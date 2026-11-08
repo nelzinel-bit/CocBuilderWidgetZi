@@ -151,11 +151,11 @@ export function parseVillageJson(raw) {
   try {
     data = JSON.parse(text);
   } catch (error) {
-    const match = /position (\\d+)/i.exec(error.message);
+    const match = /position (\d+)/i.exec(error.message);
     if (match) {
       const position = Number(match[1]);
       const excerpt = text.slice(Math.max(0, position - 55), Math.min(text.length, position + 55))
-        .replace(/\\s+/g, " ");
+        .replace(/\s+/g, " ");
       throw new Error(
         "Invalid JSON near character " + position +
         '. Nearby text: "' + excerpt + '". ' +
