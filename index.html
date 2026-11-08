@@ -50,9 +50,9 @@ main{width:min(100%,520px);margin:0 auto;padding:18px 0 28px}.topline{display:fl
 <div class="formgrid">
 <div class="field"><label for="tagInput">PLAYER TAG</label><input id="tagInput" placeholder="#ABC123"></div>
 <div class="field"><label for="townHall">TOWN HALL</label><input id="townHall" value="16" inputmode="numeric"></div>
-<div class="field full"><label for="apiToken">SUPERCELL API TOKEN (OPTIONAL)</label><input id="apiToken" type="password" autocomplete="off" placeholder="Paste API token"></div>
+
 </div>
-<div class="btnrow"><button class="btn primary" id="saveProfile">Save profile</button><button class="btn" id="clearToken">Clear token</button></div>
+<div class="btnrow"><button class="btn primary" id="saveProfile">Save profile</button></div>
 <p class="hint">API note: Supercell's public API does not expose live builder countdowns or upgrade finish times. API keys are IP-restricted, so a secure backend with a stable IP is needed for real API requests. Do not enter your API token in this page. Store it as COC_API_TOKEN on your private backend server. The browser must never receive the token.</p><div class="msg" id="profileMsg"></div>
 </details>
 <p class="hint" style="text-align:center">Unofficial fan-made tracker · Timers are stored locally on this device · Not affiliated with Supercell.</p>
@@ -61,7 +61,7 @@ main{width:min(100%,520px);margin:0 auto;padding:18px 0 28px}.topline{display:fl
 const KEY='coc-village-builders-v2',PROFILE='coc-village-profile-v2';
 const defaults=[['Archer Queen','👸','89'],['Hero Hall','🏰','10'],['Barbarian King','👑','71'],['Grand Warden','🧙','65'],['Royal Champion','🛡️','45'],['Building Upgrade','🔨','—']];
 const blank=(d)=>({name:d[0],icon:d[1],level:d[2],end:null,start:null,duration:null});
-let slots=defaults.map(blank),potionEnd=null,tokenInMemory='',villageData=null,importedTimers=[];
+let slots=defaults.map(blank),potionEnd=null,villageData=null,importedTimers=[];
 try{villageData=JSON.parse(localStorage.getItem('coc-imported-village-v1')||'null');if(villageData)importedTimers=extractTimers(villageData)}catch{}
 try{let s=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(s)&&s.length===6)slots=s}catch{}
 try{let p=JSON.parse(localStorage.getItem(PROFILE));if(p){$('playerLabel').textContent=p.tag||'#YOURPLAYER';$('townLabel').textContent=`TOWN HALL ${p.th||'16'} · 6/6 BUILDERS + GOBLIN`;$('tagInput').value=p.tag||'';$('townHall').value=p.th||'16'}}catch{}
@@ -109,8 +109,7 @@ $('save').onclick=()=>{let i=+$('slot').value,end=$('end').value?new Date($('end
 $('clear').onclick=()=>{let i=+$('slot').value;slots[i]={...blank(defaults[i])};save();fillForm(i);render();$('message').textContent='Builder slot cleared.'};
 $('refresh').onclick=()=>{render();$('updated').textContent='UPDATED JUST NOW'};
 $('potionStart').onclick=()=>{potionEnd=Date.now()+3600000;render();$('potionLeft').textContent='01:00:00 left'};
-$('saveProfile').onclick=()=>{let p={tag:$('tagInput').value.trim()||'#YOURPLAYER',th:$('townHall').value.trim()||'16'};localStorage.setItem(PROFILE,JSON.stringify(p));$('playerLabel').textContent=p.tag;$('townLabel').textContent=`TOWN HALL ${p.th} · 6/6 BUILDERS + GOBLIN`;$('profileMsg').textContent='Village profile saved.';tokenInMemory=''};
-$('clearToken').onclick=()=>{$('apiToken').value='';tokenInMemory='';$('profileMsg').textContent='Token cleared from this session.'};
+$('saveProfile').onclick=()=>{let p={tag:$('tagInput').value.trim()||'#YOURPLAYER',th:$('townHall').value.trim()||'16'};localStorage.setItem(PROFILE,JSON.stringify(p));$('playerLabel').textContent=p.tag;$('townLabel').textContent=`TOWN HALL ${p.th} · 6/6 BUILDERS + GOBLIN`;$('profileMsg').textContent='Village profile saved.'};
 $('importJson').onclick=()=>{try{let raw=$('jsonPaste').value.trim();if(!raw&&$('jsonFile').files[0]){let reader=new FileReader();reader.onload=()=>{try{importVillage(reader.result);$('importMsg').textContent='Village data imported successfully.'}catch(e){$('importMsg').textContent=e.message}};reader.readAsText($('jsonFile').files[0]);return}if(!raw)throw new Error('Choose a JSON file or paste the export first.');importVillage(raw);$('importMsg').textContent='Village data imported successfully.'}catch(e){$('importMsg').textContent=e.message}};
 $('jsonFile').onchange=()=>{let f=$('jsonFile').files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{$('jsonPaste').value=reader.result};reader.readAsText(f)};
 $('clearImport').onclick=()=>{localStorage.removeItem('coc-imported-village-v1');villageData=null;importedTimers=[];$('importSummary').textContent='Imported village data removed.';renderImported()};
