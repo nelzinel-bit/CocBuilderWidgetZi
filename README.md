@@ -37,3 +37,16 @@ Then open the PWA, expand **Live account sync**, enter your backend base URL and
 
 ## Security
 Never paste the Supercell token into the PWA, frontend code, GitHub, or a public `.env` file. Configure it only as a secret environment variable on the backend host. This repository contains `.env.example` with placeholder values only.
+
+
+## Discord community JSON importer
+
+The repository also includes a Discord-only MVP for the existing Kumpadres-Bot application:
+
+- Bot source: discord-bot/
+- Slash commands: /coc import and /coc help
+- Members paste a CoC JSON export in a modal; the bot publishes a readable report in the same channel.
+- The report includes current/max level columns for Home Village and Builder Base items, plus upgrade timers.
+- The bot does not need a Supercell API token or the Message Content privileged intent.
+
+Follow discord-bot/README.md to deploy it as a Render Background Worker. Kumpadres-Bot is already installed in the Discord server; it only needs its token, application ID, server ID and (optionally) the target channel ID as private environment variables.
