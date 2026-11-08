@@ -1,0 +1,16 @@
+services:
+  - type: worker
+    name: kumpadres-coc-bot
+    runtime: node
+    rootDir: discord-bot
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: COC_CHANNEL_ID
+        sync: false
