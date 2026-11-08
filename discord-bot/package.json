@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/index.js",
     "register": "node src/register-commands.js",
-    "check": "node --check src/index.js && node --check src/parser.js && node --check src/game-data.js && node --check src/commands.js && node --check src/register-commands.js"
+    "check": "node --check src/index.js && node --check src/parser.js && node --check src/game-data.js && node --check src/commands.js && node --check src/register-commands.js",
+    "smoke": "node src/smoke-test.js"
   },
   "dependencies": {
     "clash-of-clans-data": "0.19.1",
