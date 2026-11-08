@@ -52,7 +52,8 @@ button:disabled{opacity:.6;cursor:wait}
 </div>
 
 <label for="json">Your complete Clash of Clans JSON</label>
-<textarea id="json" spellcheck="false" autocomplete="off" placeholder='Paste the full JSON here, starting with {"tag": ...}'></textarea>
+<textarea id="json" maxlength="262144" spellcheck="false" autocomplete="off" placeholder='Paste the full JSON here, starting with {"tag": ...}'></textarea>
+<div class="hint" id="counter">0 / 262,144 characters</div>
 <div class="actions">
 <button type="button" class="secondary" id="paste">Paste from clipboard</button>
 <button type="button" id="submit">Process JSON and post report</button>
@@ -68,7 +69,11 @@ const submit=document.getElementById("submit");
 const paste=document.getElementById("paste");
 const builderInput=document.getElementById("builderPotions");
 const researchInput=document.getElementById("researchPotions");
+const counter=document.getElementById("counter");
 function show(message,kind){statusBox.className="status "+kind;statusBox.textContent=message;}
+input.addEventListener("input",()=>{
+  counter.textContent=input.value.length.toLocaleString()+" / 262,144 characters";
+});
 history.replaceState(null,"",location.pathname);
 paste.addEventListener("click",async()=>{
   try{
