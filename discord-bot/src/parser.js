@@ -143,20 +143,26 @@ export function parseVillageJson(raw) {
 
   let text = raw.trim();
   const fence = String.fromCharCode(96).repeat(3);
-  if (text.startsWith(fence)) {
-    text = text.slice(3);
-    if (text.slice(0, 4).toLowerCase() === "json") text = text.slice(4);
-  }
-  if (text.endsWith(fence)) text = text.slice(0, -3);
+  // Members sometimes copy Markdown fences as well as the JSON.
+  // They are not part of the export and can safely be stripped.
+  text = text.split(fence + "json").join("").split(fence).join("").trim();
 
   let data;
   try {
-    data = JSON.parse(text.trim());
+    data = JSON.parse(text);
   } catch (error) {
-    const match = /position (\d+)/i.exec(error.message);
-    throw new Error(match
-      ? "The JSON is invalid near character " + match[1] + ". Check that all parts are in order and no characters are missing."
-      : "The JSON could not be parsed. Check that the pasted text is complete and valid.");
+    const match = /position (\\d+)/i.exec(error.message);
+    if (match) {
+      const position = Number(match[1]);
+      const excerpt = text.slice(Math.max(0, position - 55), Math.min(text.length, position + 55))
+        .replace(/\\s+/g, " ");
+      throw new Error(
+        "Invalid JSON near character " + position +
+        '. Nearby text: "' + excerpt + '". ' +
+        "Check that the five parts are consecutive, in order, and no character was removed or repeated."
+      );
+    }
+    throw new Error("The JSON could not be parsed. Check that the pasted text is complete and valid.");
   }
 
   if (!data || typeof data !== "object" || Array.isArray(data)) {
