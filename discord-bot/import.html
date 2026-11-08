@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#22232a">
+<title>Kumpadres-Bot · CoC JSON Import</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:#17181e;color:#f4f4f5}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:28px 16px;display:grid;place-items:center}
+.card{width:min(820px,100%);background:#23242b;border:1px solid #383943;border-radius:16px;padding:24px;box-shadow:0 18px 60px #0006}
+h1{font-size:24px;margin:0 0 8px}
+.sub{color:#b8b8c2;margin:0 0 20px;line-height:1.5}
+.notice{background:#302d25;border:1px solid #79612c;padding:12px 14px;border-radius:10px;color:#f4d58b;font-size:14px;margin-bottom:18px}
+label{display:block;font-weight:650;margin:12px 0 8px}
+textarea{width:100%;min-height:340px;resize:vertical;background:#191a20;color:#fff;border:1px solid #484a56;border-radius:10px;padding:14px;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;outline:none}
+textarea:focus{border-color:#747bff;box-shadow:0 0 0 2px #5865f255}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+button{border:0;border-radius:9px;padding:12px 17px;font-weight:700;cursor:pointer;background:#5865f2;color:#fff}
+button.secondary{background:#3a3b45}
+button:disabled{opacity:.6;cursor:wait}
+.status{margin-top:15px;padding:12px;border-radius:9px;display:none;line-height:1.45;overflow-wrap:anywhere}
+.status.error{display:block;background:#3a2226;color:#ffb7bd}
+.status.ok{display:block;background:#1d382b;color:#a6f1c3}
+.hint{color:#aaaab5;font-size:12px;margin-top:12px}
+@media(max-width:560px){.card{padding:18px}h1{font-size:21px}textarea{min-height:280px}}
+</style>
+</head>
+<body>
+<main class="card">
+<h1>🏰 Kumpadres-Bot · Clash of Clans import</h1>
+<p class="sub">Paste your entire copied village JSON below. You only need one paste.</p>
+<div class="notice">This private import link is single-use and expires in 15 minutes. Do not share it. Your JSON is processed in memory and is not saved.</div>
+<label for="json">Your complete Clash of Clans JSON</label>
+<textarea id="json" spellcheck="false" autocomplete="off" placeholder='Paste the full JSON here, starting with {"tag": ...}'></textarea>
+<div class="actions">
+<button type="button" class="secondary" id="paste">Paste from clipboard</button>
+<button type="button" id="submit">Process JSON and post report</button>
+</div>
+<div id="status" class="status" role="status" aria-live="polite"></div>
+<p class="hint">Maximum import size: 256 KB. The report will appear in the Discord channel where you ran /coc import.</p>
+</main>
+<script>
+const importToken=__IMPORT_TOKEN__;
+const input=document.getElementById("json");
+const statusBox=document.getElementById("status");
+const submit=document.getElementById("submit");
+const paste=document.getElementById("paste");
+function show(message,kind){statusBox.className="status "+kind;statusBox.textContent=message;}
+history.replaceState(null,"",location.pathname);
+paste.addEventListener("click",async()=>{
+  try{
+    input.value=await navigator.clipboard.readText();
+    show("Clipboard pasted. Review the JSON, then submit.","ok");
+  }catch(_){
+    show("Clipboard access was blocked. Click the text area and press Ctrl+V instead.","error");
+    input.focus();
+  }
+});
+submit.addEventListener("click",async()=>{
+  const value=input.value.trim();
+  if(!value){show("Paste your full village JSON first.","error");input.focus();return;}
+  if(new TextEncoder().encode(value).length>262144){show("This JSON is larger than the 256 KB limit.","error");return;}
+  submit.disabled=true;
+  paste.disabled=true;
+  show("Processing your village export…","ok");
+  try{
+    const response=await fetch("/api/import",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({token:importToken,json:value})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||("Server returned HTTP "+response.status));
+    input.value="";
+    input.disabled=true;
+    show(data.message||"Your village report was posted to Discord. You can close this tab.","ok");
+    submit.textContent="Import completed";
+  }catch(error){
+    show(error.message,"error");
+    submit.disabled=false;
+    paste.disabled=false;
+  }
+});
+</script>
+</body>
+</html>
