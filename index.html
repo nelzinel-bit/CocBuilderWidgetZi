@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#172334"><meta name="description" content="Clash of Clans village and builder countdown dashboard">
+<link rel="manifest" href="manifest.webmanifest">
+<title>CoC Village Tracker</title>
+<style>
+:root{color-scheme:dark;--bg:#0e1724;--panel:#1b2a3d;--panel2:#22344a;--line:#40536a;--txt:#f2f5f8;--muted:#a8b5c5;--gold:#e7bd61;--green:#9bd68e;--purple:#a88bd0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -10%,#344457 0,#172334 52%,#101a29 100%);color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom)}
+main{width:min(100%,520px);margin:0 auto;padding:18px 0 28px}.topline{display:flex;align-items:center;justify-content:space-between;gap:10px}.village{display:flex;align-items:center;gap:11px;min-width:0}.badgeicon{width:48px;height:48px;border-radius:14px;background:linear-gradient(145deg,#4b5c43,#1c2b3d);display:grid;place-items:center;font-size:27px;border:1px solid #67755b}.tag{font-weight:850;font-size:16px;letter-spacing:.03em}.sub{font-size:10px;color:var(--gold);margin-top:3px;letter-spacing:.04em}.refresh{border:0;background:transparent;color:var(--gold);font-size:24px;padding:8px;cursor:pointer}.potion{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#302c49;border:1px solid #765c9b;border-radius:12px;padding:10px;margin:12px 0 13px;color:#d9c8ef;font-size:12px;font-weight:750}.potion-left{display:flex;align-items:center;gap:8px}.potion-icon{font-size:22px}.potion button{background:transparent;border:1px solid #78659b;color:#e7d8ff;border-radius:8px;padding:5px 8px;font-size:11px}
+.section{font-size:10px;font-weight:850;letter-spacing:.12em;color:var(--gold);margin:9px 0 8px}.builders{display:grid;gap:7px}.builder{display:grid;grid-template-columns:43px minmax(0,1fr) auto;gap:9px;align-items:center;background:linear-gradient(110deg,#223247,#1d2b3e);border:1px solid rgba(255,255,255,.035);border-radius:12px;padding:9px 10px}.avatar{width:40px;height:43px;display:grid;place-items:center;font-size:29px;filter:drop-shadow(0 2px 2px #0008)}.bmain{min-width:0}.btitle{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.timer{font-size:14px;color:var(--green);font-weight:850;font-variant-numeric:tabular-nums;margin-top:1px}.progress{height:4px;background:#35475c;border-radius:5px;margin:5px 0 4px;overflow:hidden}.progress i{height:100%;display:block;background:linear-gradient(90deg,#8acb80,#c5e99a);border-radius:5px}.finish{font-size:10px;color:var(--muted)}.level{font-size:11px;color:var(--gold);align-self:start;padding-top:2px;white-space:nowrap}.empty{color:var(--muted);font-size:12px;padding:14px;text-align:center;border:1px dashed var(--line);border-radius:12px}.footerline{display:flex;justify-content:space-between;gap:8px;margin-top:11px;color:#aab7c7;font-size:10px;font-weight:700}.panel{margin-top:13px;background:#19283a;border:1px solid var(--line);border-radius:14px;padding:13px}.panel summary{font-weight:800;cursor:pointer;color:#e9edf4}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.field{display:grid;gap:5px}.field.full{grid-column:1/-1}.field label{font-size:10px;color:var(--muted);font-weight:700}input,select,textarea{width:100%;background:#101b29;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;min-width:0}.btn{background:#34475e;color:var(--txt);border:1px solid #52677f;border-radius:9px;padding:10px 12px;font-weight:750;cursor:pointer}.btn.primary{background:var(--gold);color:#241d10;border-color:var(--gold)}.btnrow{display:flex;gap:8px;margin-top:10px}.btnrow .btn{flex:1}.hint{font-size:10px;line-height:1.5;color:var(--muted);margin-top:9px}.msg{font-size:11px;color:var(--green);min-height:16px;margin-top:7px}.tiny{font-size:10px;color:var(--muted)}@media(min-width:480px){body{padding-left:18px;padding-right:18px}.builder{padding:11px 12px}.avatar{font-size:32px}}
+</style></head>
+<body><main>
+<header class="topline"><div class="village"><div class="badgeicon">🏰</div><div><div class="tag" id="playerLabel">#YOURPLAYER</div><div class="sub" id="townLabel">TOWN HALL · 6/6 BUILDERS + GOBLIN</div></div></div><button class="refresh" id="refresh" aria-label="Refresh timers">⟳</button></header>
+<section class="potion"><div class="potion-left"><span class="potion-icon">🧪</span><span>Builder Potion · 10×</span></div><span id="potionLeft">Not active</span><button id="potionStart">Start</button></section>
+<div class="section">BUILDERS&nbsp; <span id="builderCount">6/6</span> + GOBLIN</div>
+<section class="builders" id="builders"></section>
+<div class="footerline"><span>OPEN VILLAGE ↗</span><span id="updated">UPDATED JUST NOW</span></div>
+
+<details class="panel" open><summary>Builder timer controls</summary>
+<div class="formgrid">
+<div class="field"><label for="slot">BUILDER SLOT</label><select id="slot"></select></div>
+<div class="field"><label for="icon">ICON / EMOJI</label><input id="icon" maxlength="4" value="🛠️"></div>
+<div class="field full"><label for="task">UPGRADE NAME</label><input id="task" placeholder="e.g. Archer Queen"></div>
+<div class="field"><label for="level">TARGET LEVEL</label><input id="level" placeholder="e.g. 89"></div>
+<div class="field"><label for="end">FINISH DATE & TIME</label><input id="end" type="datetime-local"></div>
+</div>
+<div class="btnrow"><button class="btn primary" id="save">Save upgrade</button><button class="btn" id="clear">Clear slot</button></div><div class="msg" id="message"></div>
+</details>
+
+<details class="panel" open><summary>Import village JSON</summary>
+<p class="hint">Paste the JSON exported from Clash of Clans, or choose a .json file. The app reads your player tag, levels and every available timer. Imported timers are adjusted for time elapsed since the export.</p>
+<div class="field"><label for="jsonFile">CHOOSE JSON FILE</label><input id="jsonFile" type="file" accept=".json,application/json"></div>
+<div class="field"><label for="jsonPaste">OR PASTE JSON DATA</label><textarea id="jsonPaste" rows="5" placeholder='{"tag":"#PLAYER","timestamp":...}' style="width:100%;background:#101b29;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font:12px ui-monospace,monospace"></textarea></div>
+<div class="btnrow"><button class="btn primary" id="importJson">Import village data</button><button class="btn" id="clearImport">Remove imported data</button></div>
+<div class="msg" id="importMsg"></div>
+<div id="importSummary" class="hint"></div>
+<div class="section" style="margin-top:12px">IMPORTED ACTIVE TIMERS</div><div id="importedTimers" class="builders"><div class="empty">No village JSON imported yet.</div></div>
+</details>
+<details class="panel" open><summary>Live account sync</summary>
+<p class="hint">Connect this app to your own secure backend. The backend keeps your Supercell API token private and polls the official player profile endpoint. Builder countdowns still come from your village JSON export.</p>
+<div class="field"><label for="apiBase">BACKEND URL</label><input id="apiBase" placeholder="https://your-server.example.com"></div>
+<div class="btnrow"><button class="btn primary" id="connectApi">Connect / sync now</button><button class="btn" id="syncToggle">Auto-sync: ON</button></div>
+<div class="msg" id="syncMsg">Not connected yet.</div>
+<div id="liveProfile" class="hint">Live player profile will appear here after connecting.</div>
+<div class="hint">Automatic profile refresh: every 10 minutes while the app is open. The official API does not expose live builder timers or building levels.</div>
+</details>
+<details class="panel"><summary>Village profile & API settings</summary>
+<div class="formgrid">
+<div class="field"><label for="tagInput">PLAYER TAG</label><input id="tagInput" placeholder="#ABC123"></div>
+<div class="field"><label for="townHall">TOWN HALL</label><input id="townHall" value="16" inputmode="numeric"></div>
+<div class="field full"><label for="apiToken">SUPERCELL API TOKEN (OPTIONAL)</label><input id="apiToken" type="password" autocomplete="off" placeholder="Paste API token"></div>
+</div>
+<div class="btnrow"><button class="btn primary" id="saveProfile">Save profile</button><button class="btn" id="clearToken">Clear token</button></div>
+<p class="hint">API note: Supercell's public API does not expose live builder countdowns or upgrade finish times. API keys are IP-restricted, so a secure backend with a stable IP is needed for real API requests. Do not enter your API token in this page. Store it as COC_API_TOKEN on your private backend server. The browser must never receive the token.</p><div class="msg" id="profileMsg"></div>
+</details>
+<p class="hint" style="text-align:center">Unofficial fan-made tracker · Timers are stored locally on this device · Not affiliated with Supercell.</p>
+</main>
+<script>
+const KEY='coc-village-builders-v2',PROFILE='coc-village-profile-v2';
+const defaults=[['Archer Queen','👸','89'],['Hero Hall','🏰','10'],['Barbarian King','👑','71'],['Grand Warden','🧙','65'],['Royal Champion','🛡️','45'],['Building Upgrade','🔨','—']];
+const blank=(d)=>({name:d[0],icon:d[1],level:d[2],end:null,start:null,duration:null});
+let slots=defaults.map(blank),potionEnd=null,tokenInMemory='',villageData=null,importedTimers=[];
+try{villageData=JSON.parse(localStorage.getItem('coc-imported-village-v1')||'null');if(villageData)importedTimers=extractTimers(villageData)}catch{}
+try{let s=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(s)&&s.length===6)slots=s}catch{}
+try{let p=JSON.parse(localStorage.getItem(PROFILE));if(p){$('playerLabel').textContent=p.tag||'#YOURPLAYER';$('townLabel').textContent=`TOWN HALL ${p.th||'16'} · 6/6 BUILDERS + GOBLIN`;$('tagInput').value=p.tag||'';$('townHall').value=p.th||'16'}}catch{}
+const $=id=>document.getElementById(id),save=()=>localStorage.setItem(KEY,JSON.stringify(slots));
+function fmt(ms){let s=Math.max(0,Math.floor(ms/1000)),d=Math.floor(s/86400);s%=86400;let h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);s%=60;return d?`${d}d ${h}h ${m}m ${s}s`:`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
+function catalogName(id,kind){
+ const maps={
+  heroes:{28000000:'Archer Queen',28000001:'Barbarian King',28000002:'Grand Warden',28000003:'Royal Champion',28000004:'Minion Prince',28000005:'Battle Machine',28000006:'Battle Copter',28000007:'Hero'},
+  buildings:{1000001:'Town Hall',1000008:'Building #1000008',1000009:'Building #1000009',1000024:'Building #1000024',1000027:'Building #1000027',1000046:'Builder Base building #1000046',1000036:'Builder Base building #1000036'},
+  pets:{73000000:'L.A.S.S.I.',73000001:'Electro Owl',73000002:'Mighty Yak',73000003:'Unicorn',73000004:'Pet #73000004'},
+  spells:{26000109:'Spell #26000109'},
+  units:{4000082:'Troop #4000082'}
+ };
+ return (maps[kind]&&maps[kind][id])||`${kind.slice(0,-1)} #${id}`;
+}
+function extractTimers(data){
+ const out=[],groups=[['buildings','buildings'],['buildings2','buildings'],['heroes','heroes'],['heroes2','heroes'],['pets','pets'],['spells','spells'],['units','units'],['helpers','helpers']];
+ for(const [key,kind] of groups){for(const item of (Array.isArray(data[key])?data[key]:[])){if(Number.isFinite(item.timer)&&item.timer>0){out.push({kind,id:item.data,name:catalogName(item.data,kind),level:item.lvl??null,seconds:item.timer,exportAt:Number(data.timestamp)||Date.now()/1000,extra:!!item.extra,recurrent:!!item.helper_recurrent})}}}
+ for(const [key,kind] of [['helpers','helper']])for(const item of (Array.isArray(data[key])?data[key]:[])){if(Number.isFinite(item.helper_cooldown)&&item.helper_cooldown>0)out.push({kind,id:item.data,name:`Helper #${item.data} cooldown`,level:item.lvl??null,seconds:item.helper_cooldown,exportAt:Number(data.timestamp)||Date.now()/1000})}
+ if(data.boosts&&Number.isFinite(data.boosts.clocktower_cooldown)&&data.boosts.clocktower_cooldown>0)out.push({kind:'boost',id:'clocktower',name:'Clock Tower cooldown',level:null,seconds:data.boosts.clocktower_cooldown,exportAt:Number(data.timestamp)||Date.now()/1000});
+ return out;
+}
+function importVillage(raw){
+ let parsed=typeof raw==='string'?JSON.parse(raw):raw;
+ if(!parsed||typeof parsed!=='object'||!parsed.tag||!Array.isArray(parsed.buildings))throw new Error('This does not look like a valid Clash of Clans village export.');
+ villageData=parsed;importedTimers=extractTimers(parsed);
+ localStorage.setItem('coc-imported-village-v1',JSON.stringify(parsed));
+ $('playerLabel').textContent=parsed.tag;
+ $('tagInput').value=parsed.tag;
+ let th=(parsed.buildings||[]).find(x=>x.data===1000001)?.lvl;
+ if(th){$('townHall').value=th;$('townLabel').textContent=`TOWN HALL ${th} · ${importedTimers.length} IMPORTED TIMERS`;}
+ renderImported();
+ $('importSummary').textContent=`Imported ${parsed.tag} · ${parsed.buildings.length} home-village building entries · ${importedTimers.length} timer/cooldown entries. Export time: ${new Date((Number(parsed.timestamp)||Date.now()/1000)*1000).toLocaleString()}.`;
+}
+function renderImported(){
+ const now=Date.now();
+ $('importedTimers').innerHTML=importedTimers.length?importedTimers.map((t,i)=>{let end=t.exportAt*1000+t.seconds*1000,remaining=end-now,done=remaining<=0;return `<article class="builder"><div class="avatar">${t.kind==='heroes'?'🦸':t.kind==='buildings'?'🏗️':t.kind==='pets'?'🐾':t.kind==='spells'?'✨':t.kind==='helper'?'🧑‍🔧':'⏱️'}</div><div class="bmain"><div class="btitle">${esc(t.name)}${t.level!==null?' · Lv '+esc(t.level):''}</div><div class="timer" style="${done?'color:#a8b5c5':''}">${done?'Finished (based on export timer)':fmt(remaining)}</div><div class="finish">${done?'Expected completion passed':`Export timer · ${Math.ceil(t.seconds/60)} min total`}</div></div><div class="level">${done?'DONE':'ACTIVE'}</div></article>`}).join(''):'<div class="empty">No active timers were included in this export.</div>';
+}
+function render(){let now=Date.now(),active=0; $('builders').innerHTML=slots.map((b,i)=>{let running=b.end&&b.end>now;if(running)active++;let pct=running&&b.duration?Math.min(100,Math.max(0,(1-(b.end-now)/b.duration)*100)):0;let timer=running?fmt(b.end-now):b.end?'COMPLETE':'READY';let finish=running?'Finishes '+new Date(b.end).toLocaleString():b.end?'Upgrade completed':'No active upgrade';return `<article class="builder" data-edit="${i}"><div class="avatar">${b.icon||'🔨'}</div><div class="bmain"><div class="btitle">${esc(b.name||'Builder '+(i+1))}</div><div class="timer" style="${running?'':'color:#a8b5c5'}">${timer}</div><div class="progress"><i style="width:${pct}%"></i></div><div class="finish">${finish}</div></div><div class="level">→ ${esc(b.level||'—')}</div></article>`}).join('');$('builderCount').textContent=active+'/6';$('updated').textContent='UPDATED '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});$('potionLeft').textContent=potionEnd&&potionEnd>now?fmt(potionEnd-now)+' left':'Not active';if($('importedTimers'))renderImported()}
+function esc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fillForm(i){let b=slots[i];$('slot').value=i;$('task').value=b.name;$('icon').value=b.icon;$('level').value=b.level;$('end').value=b.end?new Date(b.end-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):''}
+$('slot').innerHTML=slots.map((_,i)=>`<option value="${i}">Builder ${i+1}</option>`).join('');$('slot').onchange=()=>fillForm(+$('slot').value);
+$('builders').onclick=e=>{let c=e.target.closest('[data-edit]');if(c){fillForm(+c.dataset.edit);document.querySelector('#editor')?.scrollIntoView({behavior:'smooth'})}};
+$('save').onclick=()=>{let i=+$('slot').value,end=$('end').value?new Date($('end').value).getTime():null;if(!end||end<=Date.now()){$('message').textContent='Choose a future completion date and time.';return}slots[i]={name:$('task').value.trim()||'Upgrade',icon:$('icon').value.trim()||'🔨',level:$('level').value.trim()||'—',end,start:Date.now(),duration:end-Date.now()};save();render();$('message').textContent='Upgrade timer saved.'};
+$('clear').onclick=()=>{let i=+$('slot').value;slots[i]={...blank(defaults[i])};save();fillForm(i);render();$('message').textContent='Builder slot cleared.'};
+$('refresh').onclick=()=>{render();$('updated').textContent='UPDATED JUST NOW'};
+$('potionStart').onclick=()=>{potionEnd=Date.now()+3600000;render();$('potionLeft').textContent='01:00:00 left'};
+$('saveProfile').onclick=()=>{let p={tag:$('tagInput').value.trim()||'#YOURPLAYER',th:$('townHall').value.trim()||'16'};localStorage.setItem(PROFILE,JSON.stringify(p));$('playerLabel').textContent=p.tag;$('townLabel').textContent=`TOWN HALL ${p.th} · 6/6 BUILDERS + GOBLIN`;$('profileMsg').textContent='Village profile saved.';tokenInMemory=''};
+$('clearToken').onclick=()=>{$('apiToken').value='';tokenInMemory='';$('profileMsg').textContent='Token cleared from this session.'};
+$('importJson').onclick=()=>{try{let raw=$('jsonPaste').value.trim();if(!raw&&$('jsonFile').files[0]){let reader=new FileReader();reader.onload=()=>{try{importVillage(reader.result);$('importMsg').textContent='Village data imported successfully.'}catch(e){$('importMsg').textContent=e.message}};reader.readAsText($('jsonFile').files[0]);return}if(!raw)throw new Error('Choose a JSON file or paste the export first.');importVillage(raw);$('importMsg').textContent='Village data imported successfully.'}catch(e){$('importMsg').textContent=e.message}};
+$('jsonFile').onchange=()=>{let f=$('jsonFile').files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{$('jsonPaste').value=reader.result};reader.readAsText(f)};
+$('clearImport').onclick=()=>{localStorage.removeItem('coc-imported-village-v1');villageData=null;importedTimers=[];$('importSummary').textContent='Imported village data removed.';renderImported()};
+if(villageData){$('jsonPaste').value='';try{importVillage(villageData)}catch(e){}}
+
+let syncEnabled=true,syncHandle=null,lastLive=null;
+const SYNC_URL_KEY='coc-live-backend-url-v1';
+try{$('apiBase').value=localStorage.getItem(SYNC_URL_KEY)||''}catch{}
+function renderLive(p){
+ lastLive=p;
+ $('liveProfile').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><div><b>${esc(p.name||'Unknown')}</b><div class="tiny">${esc(p.tag||'')}</div></div><div><b>Town Hall ${p.townHallLevel??'—'}</b><div class="tiny">Builder Hall ${p.builderHallLevel??'—'}</div></div><div><b>${Number(p.trophies||0).toLocaleString()}</b><div class="tiny">Trophies</div></div><div><b>${Number(p.expLevel||0)}</b><div class="tiny">XP level</div></div></div><div class="tiny" style="margin-top:8px">Heroes: ${(p.heroes||[]).length} · Troops: ${(p.troops||[]).length} · Spells: ${(p.spells||[]).length} · Equipment: ${(p.heroEquipment||[]).length}</div><div class="tiny">Last successful sync: ${new Date().toLocaleString()}</div>`;
+ $('playerLabel').textContent=p.tag||$('playerLabel').textContent;
+ $('townLabel').textContent=`TOWN HALL ${p.townHallLevel||'—'} · LIVE PROFILE`;
+}
+async function syncNow(){
+ let base=$('apiBase').value.trim().replace(/\/+$/,'');
+ if(!base){$('syncMsg').textContent='Enter your backend URL first.';return}
+ try{localStorage.setItem(SYNC_URL_KEY,base)}catch{}
+ $('syncMsg').textContent='Syncing official player profile…';
+ try{
+  let tag=($('tagInput').value||$('playerLabel').textContent).trim();
+  if(!tag||tag==='#YOURPLAYER')throw new Error('Import your village JSON or enter your player tag first.');
+  let res=await fetch(`${base}/api/player?tag=${encodeURIComponent(tag)}`,{headers:{'Accept':'application/json'}});
+  let data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data.error||`Backend returned HTTP ${res.status}`);
+  renderLive(data);$('syncMsg').textContent='Connected · profile synced successfully.';
+ }catch(e){$('syncMsg').textContent='Sync failed: '+e.message}
+}
+function startSync(){if(syncHandle)clearInterval(syncHandle);syncHandle=null;if(syncEnabled){syncHandle=setInterval(syncNow,10*60*1000)}}
+$('connectApi').onclick=syncNow;
+$('syncToggle').onclick=()=>{syncEnabled=!syncEnabled;$('syncToggle').textContent='Auto-sync: '+(syncEnabled?'ON':'OFF');startSync();if(syncEnabled)syncNow()};
+startSync();
+render();fillForm(0);setInterval(render,1000);
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script></body></html>
