@@ -7,15 +7,21 @@ import {
   GatewayIntentBits,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  REST,
+  Routes
 } from "discord.js";
+import { cocCommand } from "./commands.js";
+import { catalogueSize } from "./game-data.js";
 import { buildReportEmbeds, parseVillageJson } from "./parser.js";
 
 const token = process.env.DISCORD_TOKEN;
+const clientId = process.env.DISCORD_CLIENT_ID;
+const guildId = process.env.DISCORD_GUILD_ID;
 const allowedChannelId = process.env.COC_CHANNEL_ID || "";
 
-if (!token) {
-  console.error("Missing DISCORD_TOKEN environment variable.");
+if (!token || !clientId || !guildId) {
+  console.error("Missing DISCORD_TOKEN, DISCORD_CLIENT_ID, or DISCORD_GUILD_ID environment variable.");
   process.exit(1);
 }
 
@@ -156,8 +162,18 @@ async function handleImportSubmit(interaction) {
   }
 }
 
-client.once(Events.ClientReady, readyClient => {
+client.once(Events.ClientReady, async readyClient => {
   console.log("Kumpadres-Bot is online as " + readyClient.user.tag);
+  console.log("Loaded " + catalogueSize() + " game-data catalogue entries.");
+  try {
+    const rest = new REST({ version: "10" }).setToken(token);
+    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+      body: [cocCommand.toJSON()]
+    });
+    console.log("Registered /coc commands in the configured Discord server.");
+  } catch (error) {
+    console.error("Could not register /coc commands:", error);
+  }
 });
 
 client.on(Events.InteractionCreate, async interaction => {
