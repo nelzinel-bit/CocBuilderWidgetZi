@@ -138,7 +138,8 @@ export function getMaxLevelAt(item, caps = {}) {
 
   const allowed = item.levels.filter(level => requirementKeys.every(([, keys, cap]) => {
     const key = keys.find(candidate => level[candidate] !== undefined && level[candidate] !== null);
-    if (!key || cap === undefined || cap === null) return true;
+    if (!key) return true;
+    if (cap === undefined || cap === null) return false;
     const required = Number(level[key]);
     return !Number.isFinite(required) || cap >= required;
   }));
