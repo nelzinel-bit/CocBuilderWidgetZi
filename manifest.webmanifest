@@ -1,0 +1,10 @@
+{
+  "name": "CocBuilderWidgetZi",
+  "short_name": "CoC Tracker",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0e1724",
+  "theme_color": "#172334",
+  "description": "Clash of Clans village, builder timer, JSON import and hybrid profile sync."
+}
