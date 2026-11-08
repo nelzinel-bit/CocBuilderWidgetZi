@@ -168,21 +168,49 @@ export function parseVillageJson(raw, options = {}) {
   text = text.split(fence + "json").join("").split(fence).join("").trim();
 
   let data;
+  let repairedCommaCount = 0;
   try {
     data = JSON.parse(text);
-  } catch (error) {
-    const match = /position (\d+)/i.exec(error.message);
-    if (match) {
-      const position = Number(match[1]);
-      const excerpt = text.slice(Math.max(0, position - 55), Math.min(text.length, position + 55))
-        .replace(/\s+/g, " ");
-      throw new Error(
-        "Invalid JSON near character " + position +
-        '. Nearby text: "' + excerpt + '". ' +
-        "Check that the five parts are consecutive, in order, and no character was removed or repeated."
-      );
+  } catch (firstError) {
+    // Repair only the likely missing comma between adjacent exported entities.
+    const repairedText = text.replace(/}(\s*)(?=\{\s*"data"\s*:)/g, (_match, whitespace) => {
+      repairedCommaCount += 1;
+      return "}," + whitespace;
+    });
+
+    if (repairedCommaCount > 0) {
+      try {
+        data = JSON.parse(repairedText);
+        text = repairedText;
+      } catch (repairError) {
+        repairedCommaCount = 0;
+        const match = /position (\d+)/i.exec(repairError.message);
+        if (match) {
+          const position = Number(match[1]);
+          const excerpt = text.slice(Math.max(0, position - 55), Math.min(text.length, position + 55))
+            .replace(/\s+/g, " ");
+          throw new Error(
+            "Invalid JSON near character " + position +
+            '. Nearby text: "' + excerpt + '". ' +
+            "Check that the JSON is complete and copied directly from the Clash of Clans export."
+          );
+        }
+        throw new Error("The JSON could not be parsed. Check that the pasted text is complete and valid.");
+      }
+    } else {
+      const match = /position (\d+)/i.exec(firstError.message);
+      if (match) {
+        const position = Number(match[1]);
+        const excerpt = text.slice(Math.max(0, position - 55), Math.min(text.length, position + 55))
+          .replace(/\s+/g, " ");
+        throw new Error(
+          "Invalid JSON near character " + position +
+          '. Nearby text: "' + excerpt + '". ' +
+          "Check that the JSON is complete and copied directly from the Clash of Clans export."
+        );
+      }
+      throw new Error("The JSON could not be parsed. Check that the pasted text is complete and valid.");
     }
-    throw new Error("The JSON could not be parsed. Check that the pasted text is complete and valid.");
   }
 
   if (!data || typeof data !== "object" || Array.isArray(data)) {
@@ -287,7 +315,8 @@ export function parseVillageJson(raw, options = {}) {
     cooldowns,
     sections,
     caps,
-    potionPlan: { builderPotions, researchPotions }
+    potionPlan: { builderPotions, researchPotions },
+    repairedCommaCount
   };
 }
 
@@ -299,6 +328,7 @@ export function buildReportEmbeds(report) {
     "**Builder Base:** " + (report.builderHall ? "Builder Hall " + report.builderHall : "Level unavailable in this export"),
     "**Export snapshot:** " + report.snapshotText + " (Philippine time)",
     "**Upgrade timers found:** " + report.timerRows.length,
+    ...(report.repairedCommaCount ? ["**Import cleanup:** " + report.repairedCommaCount + " missing separator(s) repaired automatically"] : []),
     "**Planned boosts:** " +
       (report.potionPlan.builderPotions ? report.potionPlan.builderPotions + " Builder Potion(s)" : "No Builder Potion") +
       " · " +
