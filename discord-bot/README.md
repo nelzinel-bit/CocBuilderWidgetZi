@@ -1,30 +1,41 @@
 # Kumpadres-Bot — Clash of Clans one-paste JSON import
 
-This bot uses your existing Discord application, Kumpadres-Bot. A member runs `/coc import`, opens a private one-time link, pastes the entire Clash of Clans JSON once into a browser form, and submits it. Kumpadres-Bot publishes the readable report in the Discord channel where the command was run.
+This bot uses your existing Discord application, Kumpadres-Bot. A member runs `/coc import`, opens a private one-time link, pastes the entire Clash of Clans JSON once into a browser form, optionally selects planned Builder and Research Potions, and submits it. Kumpadres-Bot publishes a readable report in the channel where the command was run.
 
 ## What it does
 
-- `/coc import` replies privately with a button to a one-paste import form.
-- The member pastes the complete clipboard JSON into one large text box. No chunking and no file upload are needed.
+- `/coc import` replies privately with a one-paste import form.
+- The member pastes the complete JSON into one large text box. No chunking and no file upload are needed.
+- Optional inputs: number of Builder Potions to use now (0–5) and Research Potions to use now (0–5).
+- Each potion lasts 1 hour; using multiple potions extends duration, not boost effectiveness.
+- The report shows the normal remaining time and a second projected time if the selected potions are used immediately.
+- Builder Potion projections apply to Home Village building and hero upgrade timers. They do not apply to Builder Base, Laboratory research, Pet House research or Builder's Apprentice.
+- Research Potion projections apply to Home Village Laboratory troop and spell upgrades. They do not apply to Builder Base research, Pet House upgrades or the Lab Assistant.
 - The web form supports JSON up to 256 KB.
 - The private import link is a random single-use token, expires after 15 minutes, and is bound server-side to the Discord user and channel that requested it.
-- The bot validates the JSON and publishes a readable report in that same channel. The member's confirmation remains private.
+- The bot publishes a readable report in that same channel. The member's confirmation remains private.
 - Reports include Home Village buildings, traps, heroes, troops, spells, pets, siege machines and equipment, plus Builder Base buildings, traps, troops and heroes.
 - Rows show current level, maximum level supported by the member's Town Hall or Builder Hall and available prerequisite buildings, quantity and status.
 - Upgrade timers are calculated from the export timestamp. Helper and Clock Tower cooldowns are also shown.
-- `/coc help` explains the import flow.
-- The bot does not save the submitted JSON to disk or a database. It is held in memory only while processing, then discarded.
+- The JSON export does not tell the bot whether potions are actually active. Potion counts are planning inputs supplied by the member; the projected finish times assume the selected potions are used immediately after submission.
+- The bot does not save submitted JSON to disk or a database. It is processed in memory and discarded after the report is posted.
 - No Supercell API token is required.
+
+## Potion math
+
+Supercell describes the Builder Potion as 10× Home Village Builder speed for 1 hour and the Research Potion as 24× Home Village Laboratory speed for 1 hour. Multiple potions of the same type extend the boost duration rather than increasing its multiplier.
+
+For an upgrade with `R` seconds remaining, potion count `N`, and multiplier `M`, the assumed boost window is `N × 3600` seconds. If the upgrade finishes within that accelerated work window, projected finish time is `R / M`; otherwise, it is `R - (M - 1) × N × 3600`. This models use of all selected potions immediately, and only the upgrade already in progress; it does not predict what a builder or laboratory starts next.
 
 ## Import flow
 
 1. Member copies the JSON export from Clash of Clans.
 2. In the target Discord channel, member runs `/coc import`.
 3. Bot replies privately with an **Open one-paste JSON importer** button.
-4. Member opens the link, pastes the entire JSON in one field, then submits.
+4. Member opens the link, selects the number of Builder and Research Potions to use (or leaves both at 0), pastes the entire JSON once, then submits.
 5. Bot posts the report to the original channel.
 
-The private link expires after 15 minutes and is single-use. Do not share it. If the Render service restarts before submission, the member should run `/coc import` again to get a fresh link.
+The private link expires after 15 minutes and is single-use. Do not share it. If the Render service restarts before submission, the member should run `/coc import` again to get a new link.
 
 ## Maximum-level data
 
@@ -72,8 +83,8 @@ Render free web services can spin down during inactivity and may restart. The bo
 ## Important limitations
 
 - The village JSON is a snapshot, not a live account connection. Timers are adjusted using the export timestamp.
-- A timer that already elapsed is labelled elapsed; import a fresh export for updated data.
+- The potion projection assumes use starts immediately on submission; it is not evidence that a potion is active in the game.
+- If a timer has already elapsed, the bot labels it elapsed; import a fresh export.
 - Unknown game IDs or missing level prerequisites are shown as unknown / a dash; the bot does not invent names or level caps.
-- Large reports are published as several consecutive bot messages.
 - The MVP does not retain member profiles or support historical lookups.
 - This is an unofficial community tool and is not affiliated with Supercell.
