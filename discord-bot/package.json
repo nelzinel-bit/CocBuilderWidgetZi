@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "start": "node src/index.js",
-    "register": "node src/register-commands.js"
+    "register": "node src/register-commands.js",
+    "check": "node --check src/index.js && node --check src/parser.js && node --check src/game-data.js && node --check src/commands.js && node --check src/register-commands.js"
   },
   "dependencies": {
     "clash-of-clans-data": "0.19.1",
