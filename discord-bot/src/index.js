@@ -10,6 +10,7 @@ import {
   EmbedBuilder,
   Events,
   GatewayIntentBits,
+  MessageFlags,
   REST,
   Routes
 } from "discord.js";
@@ -204,6 +205,9 @@ function isChannelAllowed(interaction) {
 async function handleCocCommand(interaction) {
   const subcommand = interaction.options.getSubcommand();
 
+  // Acknowledge the slash command immediately, before doing any other work.
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   if (subcommand === "help") {
     const embed = new EmbedBuilder()
       .setColor(0x5865F2)
@@ -218,15 +222,14 @@ async function handleCocCommand(interaction) {
         "",
         "Upgrade timers are calculated from the export timestamp. This is a snapshot, not a live account connection."
       ].join("\n"));
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.editReply({ embeds: [embed] });
     return;
   }
 
   if (subcommand === "import") {
     if (!isChannelAllowed(interaction)) {
-      await interaction.reply({
-        content: "Please run /coc import in the configured Clash of Clans channel.",
-        ephemeral: true
+      await interaction.editReply({
+        content: "Please run /coc import in the configured Clash of Clans channel."
       });
       return;
     }
@@ -247,15 +250,14 @@ async function handleCocCommand(interaction) {
       .setStyle(ButtonStyle.Link)
       .setURL(link);
 
-    await interaction.reply({
+    await interaction.editReply({
       content: [
         "**Your private JSON import form is ready.**",
         "Open the button, paste your entire Clash of Clans JSON once, and submit.",
         "The bot will post the readable report in this channel.",
         "This single-use link expires in 15 minutes. Do not share it."
       ].join("\n"),
-      components: [new ActionRowBuilder().addComponents(button)],
-      ephemeral: true
+      components: [new ActionRowBuilder().addComponents(button)]
     });
   }
 }
@@ -275,19 +277,42 @@ client.once(Events.ClientReady, async readyClient => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isChatInputCommand() || interaction.commandName !== "coc") return;
+
+  console.log(
+    "Received /coc " + interaction.options.getSubcommand() +
+    " from Discord user " + interaction.user.id +
+    " in channel " + interaction.channelId
+  );
+
   try {
-    if (interaction.isChatInputCommand() && interaction.commandName === "coc") {
-      await handleCocCommand(interaction);
-    }
+    await handleCocCommand(interaction);
+    console.log("Acknowledged /coc interaction " + interaction.id);
   } catch (error) {
-    console.error("Interaction error:", error);
-    const message = "Something went wrong while handling that command. Please try again.";
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: message, ephemeral: true }).catch(() => {});
+    console.error("Failed /coc interaction " + interaction.id + ":", error?.stack || error);
+    const message = "Kumpadres-Bot encountered an error. Please try /coc again.";
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: message, embeds: [], components: [] }).catch(replyError => {
+        console.error("Could not edit failed interaction reply:", replyError?.message || replyError);
+      });
     } else {
-      await interaction.reply({ content: message, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(replyError => {
+        console.error("Could not acknowledge failed interaction:", replyError?.message || replyError);
+      });
     }
   }
+});
+
+client.on(Events.ShardError, error => {
+  console.error("Discord Gateway shard error:", error?.stack || error);
+});
+
+client.on(Events.ShardDisconnect, (event, shardId) => {
+  console.warn("Discord Gateway shard " + shardId + " disconnected:", event?.code, event?.reason);
+});
+
+client.on(Events.ShardReconnecting, shardId => {
+  console.warn("Discord Gateway shard " + shardId + " reconnecting.");
 });
 
 client.login(token).catch(error => {
