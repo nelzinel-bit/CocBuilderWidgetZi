@@ -350,22 +350,67 @@ console.log("[Startup] Discord configuration:", {
   guildIdPresent: Boolean(guildId),
   gatewayIntent: "Guilds"
 });
-console.log("[Startup] Calling Discord client.login() now.");
 
-client.login(token).then(() => {
-  console.log("[Discord Gateway] client.login() promise resolved; current status:", client.ws.status);
-}).catch(error => {
-  console.error("Could not log in to Discord:", error?.stack || error);
-  process.exit(1);
-});
-
-setTimeout(() => {
-  if (!client.isReady()) {
-    console.error("[Discord Gateway] Still not Ready 30 seconds after startup.", {
-      status: client.ws.status,
-      ping: client.ws.ping,
-      lastGatewayDebugAt,
-      lastGatewayDebugMessage
+async function discordPreflight() {
+  console.log("[Discord Preflight] Testing HTTPS access to Discord gateway endpoint.");
+  try {
+    const response = await fetch("https://discord.com/api/v10/gateway/bot", {
+      method: "GET",
+      headers: {
+        Authorization: "Bot " + token,
+        Accept: "application/json"
+      },
+      signal: AbortSignal.timeout(12000)
     });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("[Discord Preflight] Gateway endpoint returned HTTP " + response.status + ".", {
+        message: body.message || null,
+        code: body.code || null
+      });
+      return false;
+    }
+
+    console.log("[Discord Preflight] HTTPS request succeeded.", {
+      gatewayUrl: body.url,
+      recommendedShards: body.shards,
+      remainingSessionStarts: body.session_start_limit?.remaining,
+      resetAfterMs: body.session_start_limit?.reset_after
+    });
+    return true;
+  } catch (error) {
+    console.error("[Discord Preflight] HTTPS request failed or timed out.", {
+      name: error?.name,
+      message: error?.message
+    });
+    return false;
   }
-}, 30000).unref();
+}
+
+async function startDiscordClient() {
+  await discordPreflight();
+  console.log("[Startup] Calling Discord client.login() now.");
+
+  client.login(token).then(() => {
+    console.log("[Discord Gateway] client.login() promise resolved; current status:", client.ws.status);
+  }).catch(error => {
+    console.error("Could not log in to Discord:", error?.stack || error);
+  });
+
+  setTimeout(() => {
+    if (!client.isReady()) {
+      console.error("[Discord Gateway] Still not Ready 30 seconds after startup.", {
+        status: client.ws.status,
+        statusName: client.ws.status === 3 ? "Idle" : "See discord.js Status enum",
+        ping: client.ws.ping,
+        lastGatewayDebugAt,
+        lastGatewayDebugMessage
+      });
+    }
+  }, 30000).unref();
+}
+
+startDiscordClient().catch(error => {
+  console.error("[Startup] Unexpected Discord startup error:", error?.stack || error);
+});
