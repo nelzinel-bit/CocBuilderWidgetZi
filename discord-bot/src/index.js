@@ -35,6 +35,8 @@ if (!publicBaseUrl) {
 }
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+let lastGatewayDebugAt = null;
+let lastGatewayDebugMessage = null;
 const importPageTemplate = readFileSync(new URL("../import.html", import.meta.url), "utf8");
 const importTickets = new Map();
 const TICKET_TTL_MS = 15 * 60 * 1000;
@@ -114,7 +116,16 @@ const server = createServer(async (req, res) => {
   const requestUrl = new URL(req.url || "/", publicBaseUrl);
 
   if (req.method === "GET" && (requestUrl.pathname === "/" || requestUrl.pathname === "/health")) {
-    return sendJson(res, 200, { ok: true, service: "kumpadres-coc-bot", botReady: client.isReady() });
+    return sendJson(res, 200, {
+      ok: true,
+      service: "kumpadres-coc-bot",
+      botReady: client.isReady(),
+      gatewayStatus: client.ws.status,
+      gatewayPing: client.ws.ping,
+      botUser: client.user?.tag || null,
+      lastGatewayDebugAt,
+      lastGatewayDebugMessage
+    });
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/import") {
@@ -315,7 +326,46 @@ client.on(Events.ShardReconnecting, shardId => {
   console.warn("Discord Gateway shard " + shardId + " reconnecting.");
 });
 
-client.login(token).catch(error => {
-  console.error("Could not log in to Discord:", error);
+client.on(Events.Error, error => {
+  console.error("Discord client error:", error?.stack || error);
+});
+
+client.on(Events.Warn, warning => {
+  console.warn("Discord client warning:", warning);
+});
+
+// Temporary, filtered Gateway diagnostics. Never log tokens or authorization headers.
+client.on("debug", message => {
+  if (/gateway|websocket|identify|hello|heartbeat|ready|reconnect|close|invalid session/i.test(message)) {
+    lastGatewayDebugAt = new Date().toISOString();
+    lastGatewayDebugMessage = String(message).slice(0, 500);
+    console.log("[Discord Gateway debug]", lastGatewayDebugMessage);
+  }
+});
+
+console.log("[Startup] Discord configuration:", {
+  tokenPresent: Boolean(token),
+  tokenLength: token?.length || 0,
+  clientIdPresent: Boolean(clientId),
+  guildIdPresent: Boolean(guildId),
+  gatewayIntent: "Guilds"
+});
+console.log("[Startup] Calling Discord client.login() now.");
+
+client.login(token).then(() => {
+  console.log("[Discord Gateway] client.login() promise resolved; current status:", client.ws.status);
+}).catch(error => {
+  console.error("Could not log in to Discord:", error?.stack || error);
   process.exit(1);
 });
+
+setTimeout(() => {
+  if (!client.isReady()) {
+    console.error("[Discord Gateway] Still not Ready 30 seconds after startup.", {
+      status: client.ws.status,
+      ping: client.ws.ping,
+      lastGatewayDebugAt,
+      lastGatewayDebugMessage
+    });
+  }
+}, 30000).unref();
