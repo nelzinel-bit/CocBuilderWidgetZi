@@ -49,7 +49,6 @@ addGroup("builder", [
   ["buildings", () => builder().resourceBuildings().get()],
   ["buildings", () => builder().armyBuildings().get()],
   ["buildings", () => builder().builderHall().get()],
-  ["buildings", () => builder().other().get()],
   ["traps", () => builder().traps().get()],
   ["walls", () => builder().walls().get()],
   ["troops", () => builder().troops().get()],
